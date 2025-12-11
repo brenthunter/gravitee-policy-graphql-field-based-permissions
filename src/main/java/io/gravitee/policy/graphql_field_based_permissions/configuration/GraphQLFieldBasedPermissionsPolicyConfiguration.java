@@ -25,6 +25,7 @@ import java.util.Set;
 public class GraphQLFieldBasedPermissionsPolicyConfiguration implements PolicyConfiguration {
 
     private Set<String> blockList;
+    private ResponsePolicy responsePolicy;
 
     public Set<String> getBlockList() {
         return blockList;
@@ -36,5 +37,13 @@ public class GraphQLFieldBasedPermissionsPolicyConfiguration implements PolicyCo
 
     public boolean hasBlockList() {
         return blockList != null && !blockList.isEmpty();
+    }
+
+    public ResponsePolicy getResponsePolicy() {
+        return responsePolicy;
+    }
+
+    public void setResponsePolicy(ResponsePolicy responsePolicy) {
+        this.responsePolicy = responsePolicy;
     }
 }

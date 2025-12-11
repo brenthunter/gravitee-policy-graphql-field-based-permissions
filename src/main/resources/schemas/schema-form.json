@@ -11,7 +11,14 @@
                 "type": "string",
                 "title": "Field"
             }
+        },
+        "responsePolicy": {
+            "title": "Response Policy",
+            "description": "Response Policy",
+            "type": "string",
+            "default": "BLOCK_RESPONSE",
+            "enum": ["BLOCK_RESPONSE", "REMOVE_BLOCKED_FIELDS"]
         }
     },
-    "required": ["blockList"]
+    "required": ["blockList", "responsePolicy"]
 }

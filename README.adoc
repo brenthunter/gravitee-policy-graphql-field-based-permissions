@@ -12,7 +12,7 @@
 |===
 == Description
 
-You can use the `graphql-field-based-permissions` policy to block or prevent specific fields in the payload from being returned to the consumer.
+You can use the `graphql-field-based-permissions` policy to block or prevent specific fields in the original response content from being returned to the consumer.
 
 == Compatibility with APIM
 
@@ -31,8 +31,14 @@ You can use the `graphql-field-based-permissions` policy to block or prevent spe
 .^|blockList
 ^.^|X
 |A list of fields to block or exclude from the returned payload
-^.^|LIST
+^.^|list
 ^.^|-
+
+.^|responsePolicy
+^.^|X
+|Specify either BLOCK_RESPONSE or REMOVE_BLOCKED_FIELDS
+^.^|string
+^.^|BLOCK_RESPONSE
 
 |===
 
@@ -40,8 +46,8 @@ You can use the `graphql-field-based-permissions` policy to block or prevent spe
 .Sample
 ----
 "graphql-field-based-permissions": {
-    "scope":"REQUEST",
-    "body":"Put your content here"
+    "blockList": ["field1", "field2"],
+    "responsePolicy": "BLOCK_RESPONSE"
 }
 ----
 
