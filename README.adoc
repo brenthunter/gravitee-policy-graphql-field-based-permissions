@@ -2,17 +2,20 @@
 
 == Phase
 
-[cols="2*^",options="header"]
+[cols="4*^",options="header"]
 |===
-|onRequest|onResponse
+|onRequest|onResponse|onMessageRequest|onMessageResponse
 
+^.^|-
+^.^|X
 ^.^|-
 ^.^|X
 
 |===
+
 == Description
 
-You can use the `graphql-field-based-permissions` policy to block or prevent specific fields in the original response content from being returned to the consumer.
+You can use the `graphql-field-based-permissions` policy to block, mask, or exclude specific fields in the original response content from being returned to the consumer.
 Works with any type of JSON payload.  (Support for XML payloads coming soon...)
 
 Kafka Messages (for both Protocol Mediation and Native Kafka) - If you have chosen to block the message, then the gateway will only acknowledge the message. The acknowledgment will inform the message source that it has been successfully processed.
@@ -22,7 +25,7 @@ Kafka Messages (for both Protocol Mediation and Native Kafka) - If you have chos
 |===
 |Plugin version | APIM version
 
-| 0.0.1         | 4.9.x to latest
+| 0.0.2         | 4.9.x to latest
 
 |===
 
@@ -33,9 +36,10 @@ Kafka Messages (for both Protocol Mediation and Native Kafka) - If you have chos
 
 .^|allowList
 ^.^|X
-|A list of fields to allow from the returned payload - works like a white list.
+|(Coming soon...) A list of fields to allow from the returned payload - works like a white list.
 ^.^|list
 ^.^|-
+
 .^|blockList
 ^.^|X
 |A list of fields to block or exclude from the returned payload - overrides the allow list.
