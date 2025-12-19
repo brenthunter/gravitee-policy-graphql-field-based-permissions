@@ -24,8 +24,21 @@ import java.util.Set;
  */
 public class GraphQLFieldBasedPermissionsPolicyConfiguration implements PolicyConfiguration {
 
+    private Set<String> allowList;
     private Set<String> blockList;
     private ResponsePolicy responsePolicy;
+
+    public Set<String> getAllowList() {
+        return allowList;
+    }
+
+    public void setAllowkList(Set<String> allowList) {
+        this.allowList = allowList;
+    }
+
+    public boolean hasAllowList() {
+        return allowList != null && !allowList.isEmpty();
+    }
 
     public Set<String> getBlockList() {
         return blockList;

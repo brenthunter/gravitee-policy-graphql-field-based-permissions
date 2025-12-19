@@ -20,6 +20,7 @@ import lombok.Getter;
 @Getter
 public enum ResponsePolicy {
     BLOCK_RESPONSE("response-blocked"),
+    MASK_FIELDS("response-includes-masked-fields"),
     REMOVE_BLOCKED_FIELDS("response-excludes-blocked-fields");
 
     private final String action;

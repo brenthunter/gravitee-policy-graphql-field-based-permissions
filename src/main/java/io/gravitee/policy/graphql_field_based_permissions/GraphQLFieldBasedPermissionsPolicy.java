@@ -22,11 +22,18 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.gravitee.common.http.HttpStatusCode;
 import io.gravitee.el.TemplateEngine;
 import io.gravitee.gateway.api.buffer.Buffer;
+import io.gravitee.gateway.api.buffer.Buffer;
 import io.gravitee.gateway.api.http.HttpHeaderNames;
 import io.gravitee.gateway.api.http.HttpHeaders;
 import io.gravitee.gateway.reactive.api.ExecutionFailure;
 import io.gravitee.gateway.reactive.api.context.HttpExecutionContext;
+import io.gravitee.gateway.reactive.api.context.http.HttpMessageExecutionContext;
+import io.gravitee.gateway.reactive.api.context.kafka.KafkaConnectionContext;
+import io.gravitee.gateway.reactive.api.context.kafka.KafkaMessageExecutionContext;
+import io.gravitee.gateway.reactive.api.message.Message;
+import io.gravitee.gateway.reactive.api.message.kafka.KafkaMessage;
 import io.gravitee.gateway.reactive.api.policy.Policy;
+import io.gravitee.gateway.reactive.api.policy.kafka.KafkaPolicy;
 import io.gravitee.policy.api.PolicyChain;
 import io.gravitee.policy.graphql_field_based_permissions.configuration.GraphQLFieldBasedPermissionsPolicyConfiguration;
 import io.gravitee.policy.graphql_field_based_permissions.configuration.ResponsePolicy;
@@ -42,7 +49,7 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class GraphQLFieldBasedPermissionsPolicy implements Policy {
+public class GraphQLFieldBasedPermissionsPolicy implements Policy, KafkaPolicy {
 
     public static final String PLUGIN_ID = "policy-graphql-field-based-permissions";
 
@@ -61,6 +68,7 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy {
         return PLUGIN_ID;
     }
 
+    // HTTP RESPONSE
     @Override
     public Completable onResponse(HttpExecutionContext ctx) {
         return ctx.response().onBody(body -> assignBodyContent(ctx, ctx.response().headers(), body));
@@ -75,6 +83,7 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy {
                     log.debug("NOT blocking, allow original content through");
                     return Maybe.just(content);
                 }
+
                 log.debug("Found BLOCKED content...");
                 if (configuration.getResponsePolicy().equals(ResponsePolicy.BLOCK_RESPONSE)) {
                     log.debug("BLOCKING response...");
@@ -83,10 +92,16 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy {
                             .key("CONTENT_BLOCKED")
                             .message("Response is blocked, as blocked fields were found in GraphQL/JSON content")
                     );
+                } else if (configuration.getResponsePolicy().equals(ResponsePolicy.MASK_FIELDS)) {
+                    log.debug("Allowing content through, but with blocked field values masked...");
+                    String modifiedContent = removeOrMaskBlockedFields(content.toString(), blockList, true);
+                    return Maybe.just(Buffer.buffer(modifiedContent));
+                } else {
+                    // REMOVE_BLOCKED_FIELDS
+                    log.debug("Allowing content through, but with blocked fields removed...");
+                    String modifiedContent = removeOrMaskBlockedFields(content.toString(), blockList, false);
+                    return Maybe.just(Buffer.buffer(modifiedContent));
                 }
-                log.debug("Allowing content through, but with blocked fields removed...");
-                String modifiedContent = removeBlockedFields(content.toString(), blockList);
-                return Maybe.just(Buffer.buffer(modifiedContent));
             })
             .switchIfEmpty(
                 Maybe.fromCallable(() -> {
@@ -107,6 +122,74 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy {
         //                         .cause(ioe)
         //                 );
         //             });
+    }
+
+    // PROTOCOL MEDIATION RESPONSE
+    @Override
+    public Completable onMessageResponse(HttpMessageExecutionContext ctx) {
+        return ctx.response().onMessage(message -> assignMessageBodyContent(ctx, message));
+    }
+
+    private Maybe<Message> assignMessageBodyContent(final HttpMessageExecutionContext ctx, final Message message) {
+        log.debug("Executing Field-Level Permissions Policy (in onMessageResponse context)...");
+
+        Set<String> blockList = configuration.getBlockList();
+        boolean blnContentIncludesBlockList = checkContentForBlockList(message.content().toString(), blockList);
+        if (!blnContentIncludesBlockList) {
+            log.debug("NOT blocking, allow original content through");
+            return Maybe.just(message);
+        }
+
+        log.debug("Found BLOCKED content...");
+        if (configuration.getResponsePolicy().equals(ResponsePolicy.BLOCK_RESPONSE)) {
+            log.debug("BLOCKING response... but still acknowledging message.");
+            message.ack();
+            return Maybe.empty();
+        } else if (configuration.getResponsePolicy().equals(ResponsePolicy.MASK_FIELDS)) {
+            log.debug("Allowing content through, but with blocked field values masked...");
+            String modifiedContent = removeOrMaskBlockedFields(message.content().toString(), blockList, true);
+            return Maybe.just(message.content(Buffer.buffer(modifiedContent)));
+        } else {
+            // REMOVE_BLOCKED_FIELDS
+            log.debug("Allowing content through, but with blocked fields removed...");
+            String modifiedContent = removeOrMaskBlockedFields(message.content().toString(), blockList, false);
+            return Maybe.just(message.content(Buffer.buffer(modifiedContent)));
+        }
+    }
+
+    // KAFKA MESSAGES SUBSCRIBE
+    @Override
+    public Completable onMessageResponse(KafkaMessageExecutionContext ctx) {
+        return ctx
+            .response()
+            .onMessage(kafkaMessage -> {
+                log.debug("Starting Field-Level Policy in Kafka Messages>Subscribe phase...");
+
+                Set<String> blockList = configuration.getBlockList();
+                boolean blnContentIncludesBlockList = checkContentForBlockList(kafkaMessage.content().toString(), blockList);
+                if (!blnContentIncludesBlockList) {
+                    log.debug("NOT blocking, allow original content through");
+                    return Maybe.just(kafkaMessage);
+                }
+
+                log.debug("Found BLOCKED content...");
+                if (configuration.getResponsePolicy().equals(ResponsePolicy.BLOCK_RESPONSE)) {
+                    log.debug("BLOCKING response... but still acknowledging kafkaMessage.");
+                    kafkaMessage.ack();
+                    return Maybe.empty();
+                } else if (configuration.getResponsePolicy().equals(ResponsePolicy.MASK_FIELDS)) {
+                    log.debug("Allowing content through, but with blocked field values masked...");
+                    String modifiedContent = removeOrMaskBlockedFields(kafkaMessage.content().toString(), blockList, true);
+                    kafkaMessage.content(modifiedContent);
+                    return Maybe.just(kafkaMessage);
+                } else {
+                    // REMOVE_BLOCKED_FIELDS
+                    log.debug("Allowing content through, but with blocked fields removed...");
+                    String modifiedContent = removeOrMaskBlockedFields(kafkaMessage.content().toString(), blockList, false);
+                    kafkaMessage.content(modifiedContent);
+                    return Maybe.just(kafkaMessage);
+                }
+            });
     }
 
     /**
@@ -164,14 +247,14 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy {
      * Removes fields that appear in the blockList from the JSON content.
      * Returns the cleaned JSON string.
      */
-    private String removeBlockedFields(String content, Set<String> blockList) {
+    private String removeOrMaskBlockedFields(String content, Set<String> blockList, boolean blnMaskFieldValuesEnabled) {
         if (content == null || content.isBlank() || blockList == null || blockList.isEmpty()) {
             return content; // nothing to remove
         }
 
         try {
             JsonNode root = objectMapper.readTree(content);
-            JsonNode cleaned = pruneNode(root, blockList);
+            JsonNode cleaned = pruneNode(root, blockList, blnMaskFieldValuesEnabled);
             return objectMapper.writeValueAsString(cleaned);
         } catch (Exception e) {
             log.warn("Failed to remove blocked fields from JSON response", e);
@@ -183,7 +266,7 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy {
      * Recursively removes any field whose name appears in blockList.
      * Returns a new JsonNode (immutable tree).
      */
-    private JsonNode pruneNode(JsonNode node, Set<String> blockList) {
+    private JsonNode pruneNode(JsonNode node, Set<String> blockList, boolean blnMaskFieldValuesEnabled) {
         if (node.isObject()) {
             ObjectNode obj = objectMapper.createObjectNode();
 
@@ -195,18 +278,22 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy {
 
                     // Skip blocked fields
                     if (blockList.contains(fieldName)) {
+                        if (blnMaskFieldValuesEnabled) {
+                            log.debug("Masking field: {}", fieldName);
+                            obj.put(fieldName, "*****");
+                        }
                         return;
                     }
 
                     // Recurse into children
-                    obj.set(fieldName, pruneNode(value, blockList));
+                    obj.set(fieldName, pruneNode(value, blockList, blnMaskFieldValuesEnabled));
                 });
 
             return obj;
         } else if (node.isArray()) {
             ArrayNode arr = objectMapper.createArrayNode();
             for (JsonNode child : node) {
-                arr.add(pruneNode(child, blockList));
+                arr.add(pruneNode(child, blockList, blnMaskFieldValuesEnabled));
             }
             return arr;
         }

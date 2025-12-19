@@ -3,10 +3,19 @@
     "type": "object",
     "additionalProperties": false,
     "properties": {
+        "allowList": {
+            "type": "array",
+            "title": "Allow List",
+            "description": "A list of fields to allow from the returned payload - works like a white list.",
+            "items": {
+                "type": "string",
+                "title": "Field"
+            }
+        },
         "blockList": {
             "type": "array",
             "title": "Block List",
-            "description": "Block or exclude these fields from the final response",
+            "description": "A list of fields to block or exclude from the returned payload - overrides the allow list.",
             "items": {
                 "type": "string",
                 "title": "Field"
@@ -14,11 +23,11 @@
         },
         "responsePolicy": {
             "title": "Response Policy",
-            "description": "Response Policy",
+            "description": "If the blocked fields are found in the content, you can choose to block the payload and return an error, mask the field values, or remove the blocked fields from the response.",
             "type": "string",
             "default": "BLOCK_RESPONSE",
-            "enum": ["BLOCK_RESPONSE", "REMOVE_BLOCKED_FIELDS"]
+            "enum": ["BLOCK_RESPONSE", "MASK_FIELDS", "REMOVE_BLOCKED_FIELDS"]
         }
     },
-    "required": ["blockList", "responsePolicy"]
+    "required": ["responsePolicy"]
 }

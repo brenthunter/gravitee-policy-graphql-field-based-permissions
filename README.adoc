@@ -2,17 +2,20 @@
 
 == Phase
 
-[cols="^2,^2",options="header"]
+[cols="2*^",options="header"]
 |===
 |onRequest|onResponse
 
-|-
-|X
+^.^|-
+^.^|X
 
 |===
 == Description
 
 You can use the `graphql-field-based-permissions` policy to block or prevent specific fields in the original response content from being returned to the consumer.
+Works with any type of JSON payload.  (Support for XML payloads coming soon...)
+
+Kafka Messages (for both Protocol Mediation and Native Kafka) - If you have chosen to block the message, then the gateway will only acknowledge the message. The acknowledgment will inform the message source that it has been successfully processed.
 
 == Compatibility with APIM
 
@@ -28,15 +31,20 @@ You can use the `graphql-field-based-permissions` policy to block or prevent spe
 |===
 |Property |Required |Description |Type |Default
 
+.^|allowList
+^.^|X
+|A list of fields to allow from the returned payload - works like a white list.
+^.^|list
+^.^|-
 .^|blockList
 ^.^|X
-|A list of fields to block or exclude from the returned payload
+|A list of fields to block or exclude from the returned payload - overrides the allow list.
 ^.^|list
 ^.^|-
 
 .^|responsePolicy
 ^.^|X
-|Specify either BLOCK_RESPONSE or REMOVE_BLOCKED_FIELDS
+|Specify either BLOCK_RESPONSE, MASK_FIELDS, or REMOVE_BLOCKED_FIELDS
 ^.^|string
 ^.^|BLOCK_RESPONSE
 
