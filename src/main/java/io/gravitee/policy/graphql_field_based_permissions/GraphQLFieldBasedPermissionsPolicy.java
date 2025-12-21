@@ -15,6 +15,10 @@
  */
 package io.gravitee.policy.graphql_field_based_permissions;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -39,12 +43,16 @@ import io.gravitee.policy.graphql_field_based_permissions.configuration.GraphQLF
 import io.gravitee.policy.graphql_field_based_permissions.configuration.ResponsePolicy;
 import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Maybe;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.IOException;
 import java.lang.StringBuilder;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map;
+import java.util.Set;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
@@ -53,15 +61,16 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy, KafkaPolicy {
 
     public static final String PLUGIN_ID = "policy-graphql-field-based-permissions";
 
+    private static final JsonFactory JSON_FACTORY = new JsonFactory();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private final Set<String> blockList;
+
     private GraphQLFieldBasedPermissionsPolicyConfiguration configuration;
 
     public GraphQLFieldBasedPermissionsPolicy(GraphQLFieldBasedPermissionsPolicyConfiguration configuration) {
         this.configuration = configuration;
+        this.blockList = Collections.unmodifiableSet(configuration.getBlockList());
     }
-
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-
-    private String blockListAttribute;
 
     @Override
     public String id() {
@@ -77,7 +86,7 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy, KafkaPolicy {
     private Maybe<Buffer> assignBodyContent(HttpExecutionContext ctx, HttpHeaders httpHeaders, Maybe<Buffer> body) {
         return body
             .flatMap(content -> {
-                Set<String> blockList = configuration.getBlockList();
+                //Set<String> blockList = configuration.getBlockList();
                 boolean blnContentIncludesBlockList = checkContentForBlockList(content.toString(), blockList);
                 if (!blnContentIncludesBlockList) {
                     log.debug("NOT blocking, allow original content through");
@@ -127,13 +136,13 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy, KafkaPolicy {
     // PROTOCOL MEDIATION RESPONSE
     @Override
     public Completable onMessageResponse(HttpMessageExecutionContext ctx) {
-        return ctx.response().onMessage(message -> assignMessageBodyContent(ctx, message));
+        return ctx.response().onMessage(message -> assignMessageBodyContent(ctx, ctx.response().headers(), message));
     }
 
-    private Maybe<Message> assignMessageBodyContent(final HttpMessageExecutionContext ctx, final Message message) {
+    private Maybe<Message> assignMessageBodyContent(final HttpMessageExecutionContext ctx, HttpHeaders httpHeaders, final Message message) {
         log.debug("Executing Field-Level Permissions Policy (in onMessageResponse context)...");
 
-        Set<String> blockList = configuration.getBlockList();
+        //Set<String> blockList = configuration.getBlockList();
         boolean blnContentIncludesBlockList = checkContentForBlockList(message.content().toString(), blockList);
         if (!blnContentIncludesBlockList) {
             log.debug("NOT blocking, allow original content through");
@@ -148,11 +157,13 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy, KafkaPolicy {
         } else if (configuration.getResponsePolicy().equals(ResponsePolicy.MASK_FIELDS)) {
             log.debug("Allowing content through, but with blocked field values masked...");
             String modifiedContent = removeOrMaskBlockedFields(message.content().toString(), blockList, true);
+            httpHeaders.set(HttpHeaderNames.CONTENT_LENGTH, Integer.toString(modifiedContent.length()));
             return Maybe.just(message.content(Buffer.buffer(modifiedContent)));
         } else {
             // REMOVE_BLOCKED_FIELDS
             log.debug("Allowing content through, but with blocked fields removed...");
             String modifiedContent = removeOrMaskBlockedFields(message.content().toString(), blockList, false);
+            httpHeaders.set(HttpHeaderNames.CONTENT_LENGTH, Integer.toString(modifiedContent.length()));
             return Maybe.just(message.content(Buffer.buffer(modifiedContent)));
         }
     }
@@ -165,7 +176,7 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy, KafkaPolicy {
             .onMessage(kafkaMessage -> {
                 log.debug("Starting Field-Level Policy in Kafka Messages>Subscribe phase...");
 
-                Set<String> blockList = configuration.getBlockList();
+                //Set<String> blockList = configuration.getBlockList();
                 boolean blnContentIncludesBlockList = checkContentForBlockList(kafkaMessage.content().toString(), blockList);
                 if (!blnContentIncludesBlockList) {
                     log.debug("NOT blocking, allow original content through");
@@ -276,12 +287,12 @@ public class GraphQLFieldBasedPermissionsPolicy implements Policy, KafkaPolicy {
                     String fieldName = entry.getKey();
                     JsonNode value = entry.getValue();
 
-                    // Skip blocked fields
+                    // Skip - or mask - blocked fields
                     if (blockList.contains(fieldName)) {
                         if (blnMaskFieldValuesEnabled) {
-                            log.debug("Masking field: {}", fieldName);
                             obj.put(fieldName, "*****");
                         }
+                        // Skip blocked fields
                         return;
                     }
 

@@ -22,10 +22,10 @@
 
     <groupId>io.gravitee.policy</groupId>
     <artifactId>gravitee-policy-graphql-field-based-permissions</artifactId>
-    <version>0.0.2</version>
+    <version>0.0.3</version>
 
     <name>Gravitee.io APIM - Policy - GraphQL - Field-based Permissions</name>
-    <description>Allow/Block, remove or mask, selected fields from a JSON response</description>
+    <description>Block, remove or mask, selected fields from a JSON response</description>
 
     <parent>
         <groupId>io.gravitee</groupId>

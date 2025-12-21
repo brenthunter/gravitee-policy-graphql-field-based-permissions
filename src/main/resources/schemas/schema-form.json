@@ -5,8 +5,9 @@
     "properties": {
         "allowList": {
             "type": "array",
+            "enabled": "false",
             "title": "Allow List",
-            "description": "A list of fields to allow from the returned payload - works like a white list.",
+            "description": "(Coming soon...) A list of fields to allow from the returned payload - works like a white list.",
             "items": {
                 "type": "string",
                 "title": "Field"
